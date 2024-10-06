@@ -5,10 +5,12 @@
 
 using std::cin, std::cout;
 
+class NoMoreItemsException {};
+
 template <typename T>
 class MyConcurrentQueue {
 public:
-    MyConcurrentQueue(size_t maxSize) : maxSize(maxSize) {
+    MyConcurrentQueue(size_t maxSize) : maxSize(maxSize), done(false) {
         pthread_mutex_init(&mutex, nullptr);
         pthread_cond_init(&cond_full, nullptr);
         pthread_cond_init(&cond_empty, nullptr);
@@ -33,8 +35,12 @@ public:
 
     T get() {
         pthread_mutex_lock(&mutex);
-        while (queue.empty()) {
+        while (queue.empty() && !done) {
             pthread_cond_wait(&cond_empty, &mutex);
+        }
+        if (queue.empty() && done) {
+            pthread_mutex_unlock(&mutex);
+            throw NoMoreItemsException();
         }
         T item = queue.front();
         queue.pop();
@@ -44,15 +50,21 @@ public:
         return item;
     }
 
+    void setDone() {
+        pthread_mutex_lock(&mutex);
+        done = true;
+        pthread_cond_broadcast(&cond_empty);
+        pthread_mutex_unlock(&mutex);
+    }
+
 private:
     std::queue<T> queue;
     size_t maxSize;
     pthread_mutex_t mutex;
     pthread_cond_t cond_full;
     pthread_cond_t cond_empty;
+    bool done;
 };
-
-bool done = false;
 
 void* writer(void* arg) {
     MyConcurrentQueue<int>* queue = static_cast<MyConcurrentQueue<int>*>(arg);
@@ -65,17 +77,18 @@ void* writer(void* arg) {
 
 void* reader(void* arg) {
     MyConcurrentQueue<int>* queue = static_cast<MyConcurrentQueue<int>*>(arg);
-    while (!done) {
-        queue->get();
-        sleep(1);
+    try {
+        while (true) {
+            int item = queue->get();
+            sleep(1);
+        }
+    } catch (const NoMoreItemsException&) {
     }
     return nullptr;
 }
 
 int main() {
     MyConcurrentQueue<int> queue(5);
-
-    pthread_t producer_thread, consumer_thread;
 
     int num_readers, num_writers;
 
@@ -96,7 +109,7 @@ int main() {
         pthread_join(writers[i], nullptr);
     }
 
-    done = true;
+    queue.setDone();
 
     for (int i = 0; i < num_readers; ++i) {
         pthread_join(readers[i], nullptr);
