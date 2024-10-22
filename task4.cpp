@@ -43,6 +43,15 @@ void fill_matrix(float* matrix, int N) {
     }
 }
 
+bool compare_matrices(const float* C1, const float* C2, int N, float errate) {
+    for (int i = 0; i < N * N; i++) {
+        if (fabs(C1[i] - C2[i]) > errate) {
+            return false;
+        }
+    }
+    return true;
+}
+
 
 int main() {
     vector<int> sizes = {512, 1024, 2048};
@@ -67,6 +76,14 @@ int main() {
         Multiply_veq(A.data(), B.data(), C_veq.data(), N);
         end_time = clock();
         cout << static_cast<double>(end_time - start_time) / CLOCKS_PER_SEC << " seconds" << endl;
+
+        float errate = 0.0001;
+        if (compare_matrices(C_seq.data(), C_veq.data(), N, errate)) {
+            cout << "Matrices are equal!" << endl;
+        } else {
+            cout << "Matrices are NOT equal!" << endl;
+        }
+    }
 
     }
 
