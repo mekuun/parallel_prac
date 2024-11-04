@@ -8,11 +8,12 @@ using namespace std;
 
 int random_walk(int a, int b, int x, double p) {
     int steps = 0;
-    default_random_engine generator(rand());
+    thread_local std::mt19937 generator(std::random_device{}());
     uniform_real_distribution<double> distribution(0.0, 1.0);
 
     while (x > a && x < b) {
-        double rnd = distribution(generator);
+        mt19937 generator(seed);
+        uniform_real_distribution<double> distribution(0.0, 1.0);
         if (rnd < p) x++;
         else x--;
         steps++;
