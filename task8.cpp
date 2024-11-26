@@ -3,27 +3,35 @@
 #include <vector>
 #include <ctime>
 #include <cstdlib>
+#include <utility>
 
 using namespace std;
 
-constexpr int ROWS = 1024;
-constexpr int COLS = 1024;
-constexpr int MAX_ITERATIONS = 1000;
-constexpr double ALIVE_PROB = 0.2;
+const int ROWS = 1024;
+const int COLS = 1024;
+const int MAX_ITERATIONS = 1000;
+const double ALIVE_PROB = 0.2;
 
-void initialize_grid(vector<vector<int>>& grid) {
-    srand(static_cast<unsigned>(time(nullptr)));
-    for (auto& row : grid)
-        for (auto& cell : row)
-            cell = (rand() < ALIVE_PROB * RAND_MAX) ? 1 : 0;
+void initialize_grid(vector<vector<int> >& grid) {
+    srand(static_cast<unsigned>(time(NULL)));
+    for (size_t i = 0; i < grid.size(); ++i) {
+        for (size_t j = 0; j < grid[i].size(); ++j) {
+            grid[i][j] = (rand() < ALIVE_PROB * RAND_MAX) ? 1 : 0;
+        }
+    }
 }
 
-int count_neighbors(const vector<vector<int>>& grid, int x, int y) {
-    static const vector<pair<int, int>> directions = {
-            {-1, -1}, {-1, 0}, {-1, 1}, {0, -1}, {0, 1}, {1, -1}, {1, 0}, {1, 1}
+int count_neighbors(const vector<vector<int> >& grid, int x, int y) {
+    static const pair<int, int> directions[] = {
+            make_pair(-1, -1), make_pair(-1, 0), make_pair(-1, 1),
+            make_pair(0, -1), make_pair(0, 1),
+            make_pair(1, -1), make_pair(1, 0), make_pair(1, 1)
     };
+
     int count = 0;
-    for (const auto& [dx, dy] : directions) {
+    for (size_t i = 0; i < sizeof(directions) / sizeof(directions[0]); ++i) {
+        int dx = directions[i].first;
+        int dy = directions[i].second;
         int nx = (x + dx + grid.size()) % grid.size();
         int ny = (y + dy + grid[0].size()) % grid[0].size();
         count += grid[nx][ny];
@@ -46,12 +54,12 @@ int main(int argc, char** argv) {
     double start_time = MPI_Wtime();
 
     int local_rows = calculate_rows(rank, num_procs);
-    int start_row = rank * (ROWS / num_procs) + min(rank, ROWS % num_procs);
+    int start_row = rank * (ROWS / num_procs) + (rank < ROWS % num_procs ? rank : ROWS % num_procs);
 
-    vector<vector<int>> local_grid(local_rows + 2, vector<int>(COLS, 0));
-    vector<vector<int>> next_grid(local_rows + 2, vector<int>(COLS, 0));
+    vector<vector<int> > local_grid(local_rows + 2, vector<int>(COLS, 0));
+    vector<vector<int> > next_grid(local_rows + 2, vector<int>(COLS, 0));
 
-    vector<vector<int>> global_grid;
+    vector<vector<int> > global_grid;
     if (rank == 0) {
         global_grid.resize(ROWS, vector<int>(COLS));
         initialize_grid(global_grid);
@@ -65,11 +73,12 @@ int main(int argc, char** argv) {
     }
 
     vector<int> local_data(local_rows * COLS);
-    MPI_Scatterv(rank == 0 ? &global_grid[0][0] : nullptr, send_counts.data(), displs.data(), MPI_INT,
-                 local_data.data(), local_rows * COLS, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Scatterv(rank == 0 ? &global_grid[0][0] : NULL, &send_counts[0], &displs[0], MPI_INT,
+                 &local_data[0], local_rows * COLS, MPI_INT, 0, MPI_COMM_WORLD);
 
-    for (int i = 0; i < local_rows; ++i)
+    for (int i = 0; i < local_rows; ++i) {
         copy(local_data.begin() + i * COLS, local_data.begin() + (i + 1) * COLS, local_grid[i + 1].begin());
+    }
 
     int iteration = 0, total_alive = 0;
 
@@ -78,10 +87,10 @@ int main(int argc, char** argv) {
         int bottom = (rank == num_procs - 1) ? 0 : rank + 1;
 
         MPI_Request requests[4];
-        MPI_Isend(local_grid[1].data(), COLS, MPI_INT, top, 0, MPI_COMM_WORLD, &requests[0]);
-        MPI_Isend(local_grid[local_rows].data(), COLS, MPI_INT, bottom, 1, MPI_COMM_WORLD, &requests[1]);
-        MPI_Irecv(local_grid[0].data(), COLS, MPI_INT, top, 1, MPI_COMM_WORLD, &requests[2]);
-        MPI_Irecv(local_grid[local_rows + 1].data(), COLS, MPI_INT, bottom, 0, MPI_COMM_WORLD, &requests[3]);
+        MPI_Isend(&local_grid[1][0], COLS, MPI_INT, top, 0, MPI_COMM_WORLD, &requests[0]);
+        MPI_Isend(&local_grid[local_rows][0], COLS, MPI_INT, bottom, 1, MPI_COMM_WORLD, &requests[1]);
+        MPI_Irecv(&local_grid[0][0], COLS, MPI_INT, top, 1, MPI_COMM_WORLD, &requests[2]);
+        MPI_Irecv(&local_grid[local_rows + 1][0], COLS, MPI_INT, bottom, 0, MPI_COMM_WORLD, &requests[3]);
         MPI_Waitall(4, requests, MPI_STATUSES_IGNORE);
 
         int local_alive = 0;
@@ -106,13 +115,10 @@ int main(int argc, char** argv) {
         MPI_Allreduce(&local_alive, &total_alive, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 
         if (total_alive == 0) break;
-
         iteration++;
     }
 
     double end_time = MPI_Wtime();
-    double elapsed_time = end_time - start_time;
-
     if (rank == 0) {
         cout << "Игра завершилась на итерации номер " << iteration  << endl;
         cout << "Всего живых: " << total_alive
