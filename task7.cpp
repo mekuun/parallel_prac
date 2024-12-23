@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
 
     for (i = 1; i <= local_N; i++) {
         for (j = 0; j < N; j++) {
-            f[i * N + j] = rand() / (double)RAND_MAX; //Надеюсь, тут можно rand..
+            f[i * N + j] = rand() / (double)RAND_MAX;
             f_new[i * N + j] = f[i * N + j];
         }
     }
@@ -43,28 +43,16 @@ int main(int argc, char** argv) {
         MPI_Status status;
 
         if (size > 1) {
-            if (rank % 2 == 0) {
-                if (rank < size - 1) {
-                    MPI_Sendrecv(f + local_N * N, N, MPI_DOUBLE, rank + 1, 0,
-                                 f + (local_N + 1) * N, N, MPI_DOUBLE, rank + 1, 0,
-                                 MPI_COMM_WORLD, &status);
-                }
-                if (rank > 0) {
-                    MPI_Sendrecv(f + N, N, MPI_DOUBLE, rank - 1, 0,
-                                 f, N, MPI_DOUBLE, rank - 1, 0,
-                                 MPI_COMM_WORLD, &status);
-                }
-            } else {
-                if (rank > 0) {
-                    MPI_Sendrecv(f + N, N, MPI_DOUBLE, rank - 1, 0,
-                                 f, N, MPI_DOUBLE, rank - 1, 0,
-                                 MPI_COMM_WORLD, &status);
-                }
-                if (rank < size - 1) {
-                    MPI_Sendrecv(f + local_N * N, N, MPI_DOUBLE, rank + 1, 0,
-                                 f + (local_N + 1) * N, N, MPI_DOUBLE, rank + 1, 0,
-                                 MPI_COMM_WORLD, &status);
-                }
+            // Передача данных между соседними процессами
+            if (rank < size - 1) {
+                MPI_Sendrecv(f + local_N * N, N, MPI_DOUBLE, rank + 1, 0,
+                             f + (local_N + 1) * N, N, MPI_DOUBLE, rank + 1, 0,
+                             MPI_COMM_WORLD, &status);
+            }
+            if (rank > 0) {
+                MPI_Sendrecv(f + N, N, MPI_DOUBLE, rank - 1, 0,
+                             f, N, MPI_DOUBLE, rank - 1, 0,
+                             MPI_COMM_WORLD, &status);
             }
         }
 
