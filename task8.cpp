@@ -23,15 +23,13 @@ void initialize_grid(vector<vector<int> >& grid) {
 
 int count_neighbors(const vector<vector<int> >& grid, int x, int y) {
     static const pair<int, int> directions[] = {
-            make_pair(-1, -1), make_pair(-1, 0), make_pair(-1, 1),
-            make_pair(0, -1), make_pair(0, 1),
-            make_pair(1, -1), make_pair(1, 0), make_pair(1, 1)
+            {-1, -1}, {-1, 0}, {-1, 1},
+            {0, -1}, {0, 1},
+            {1, -1}, {1, 0}, {1, 1}
     };
 
     int count = 0;
-    for (size_t i = 0; i < sizeof(directions) / sizeof(directions[0]); ++i) {
-        int dx = directions[i].first;
-        int dy = directions[i].second;
+    for (const auto& [dx, dy] : directions) {
         int nx = (x + dx + grid.size()) % grid.size();
         int ny = (y + dy + grid[0].size()) % grid[0].size();
         count += grid[nx][ny];
@@ -72,13 +70,8 @@ int main(int argc, char** argv) {
         offset += send_counts[i];
     }
 
-    vector<int> local_data(local_rows * COLS);
     MPI_Scatterv(rank == 0 ? &global_grid[0][0] : NULL, &send_counts[0], &displs[0], MPI_INT,
-                 &local_data[0], local_rows * COLS, MPI_INT, 0, MPI_COMM_WORLD);
-
-    for (int i = 0; i < local_rows; ++i) {
-        copy(local_data.begin() + i * COLS, local_data.begin() + (i + 1) * COLS, local_grid[i + 1].begin());
-    }
+                 &local_grid[1][0], local_rows * COLS, MPI_INT, 0, MPI_COMM_WORLD);
 
     int iteration = 0, total_alive = 0;
 
@@ -120,9 +113,9 @@ int main(int argc, char** argv) {
 
     double end_time = MPI_Wtime();
     if (rank == 0) {
-        cout << "Игра завершилась на итерации номер " << iteration  << endl;
-        cout << "Всего живых: " << total_alive
-        cout << "Время выполнения: " << elapsed_time << " секунд." << endl;
+        cout << "Игра завершилась на итерации номер " << iteration << endl;
+        cout << "Всего живых: " << total_alive << endl;
+        cout << "Время выполнения: " << end_time - start_time << " секунд." << endl;
     }
 
     MPI_Finalize();
